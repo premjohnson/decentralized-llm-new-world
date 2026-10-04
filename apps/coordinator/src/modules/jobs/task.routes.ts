@@ -343,7 +343,7 @@ export async function taskRoutes(
         await failTaskService(
           params.data.taskId,
           params.data.workerId,
-          body.data,
+          body.data.errorMessage,
         );
 
       if (!task) {

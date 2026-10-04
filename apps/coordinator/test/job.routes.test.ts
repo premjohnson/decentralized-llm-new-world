@@ -32,6 +32,10 @@ describe("Job routes", () => {
         datasetName: "test-dataset",
         config: {
           workers: 2,
+          dataset: [
+            "Distributed systems allow workers to cooperate.",
+            "Federated learning trains models across workers.",
+          ],
           epochs: 3,
           batchSize: 8,
           learningRate: 0.001,
@@ -88,6 +92,10 @@ describe("Job routes", () => {
         datasetName: "evaluation-dataset",
         config: {
           workers: 1,
+          dataset: [
+            "What is distributed computing?",
+            "Explain federated learning.",
+          ],
           metrics: ["accuracy", "loss"],
         },
       },
@@ -117,6 +125,11 @@ describe("Job routes", () => {
         datasetName: "test-dataset",
         config: {
           workers: 3,
+          dataset: [
+            "Training sample one.",
+            "Training sample two.",
+            "Training sample three.",
+          ],
           epochs: 2,
           batchSize: 4,
           learningRate: 0.001,
@@ -156,6 +169,10 @@ describe("Job routes", () => {
         modelName: "test-model",
         datasetName: "test-dataset",
         config: {
+          dataset: [
+            "Training sample one.",
+            "Training sample two.",
+          ],
           epochs: 1,
           batchSize: 4,
           learningRate: 0.001,
@@ -244,6 +261,9 @@ describe("Job routes", () => {
         modelName: "test-model",
         config: {
           workers: 1,
+          dataset: [
+            "Distributed training sample.",
+          ],
           epochs: 1,
         },
       },
@@ -300,6 +320,9 @@ describe("Job routes", () => {
         modelName: "test-model",
         config: {
           workers: 1,
+          dataset: [
+            "Distributed training sample.",
+          ],
           epochs: 1,
         },
       },

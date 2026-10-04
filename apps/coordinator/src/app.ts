@@ -29,6 +29,8 @@ import {
   startSchedulerWorker,
 } from "./modules/scheduler/scheduler.worker.js";
 
+import { artifactRoutes } from "./modules/artifacts/artifact.routes.js";
+
 export async function buildApp() {
   const app = Fastify({
     logger: {
@@ -69,6 +71,8 @@ export async function buildApp() {
   await app.register(taskRoutes, {
     prefix: "/api/v1",
   });
+
+  await app.register(artifactRoutes);
 
   let healthMonitor:
     | NodeJS.Timeout

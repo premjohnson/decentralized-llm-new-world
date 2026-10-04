@@ -208,12 +208,25 @@ export async function findTasksByJobId(
 
   return result.rows.map(mapTaskRow);
 }
-
 /**
- * Atomically claim the oldest pending task.
+ * Atomically claim the next pending task.
  *
- * FOR UPDATE SKIP LOCKED allows multiple workers
- * to safely claim different tasks concurrently.
+ * Training tasks use worker-aware scheduling:
+ *
+ * - A worker cannot claim multiple active training tasks
+ *   from the same job.
+ *
+ * - Training tasks are distributed across available online
+ *   workers.
+ *
+ * - A worker can claim a training task when the number of
+ *   active training tasks for the job is below the number
+ *   of online workers.
+ *
+ * - Non-training tasks use normal FIFO scheduling.
+ *
+ * PostgreSQL FOR UPDATE SKIP LOCKED guarantees that
+ * concurrent workers cannot claim the same task.
  */
 export async function claimNextPendingTask(
   workerId: string,
@@ -226,28 +239,105 @@ export async function claimNextPendingTask(
     const result = await client.query<TaskRow>(
       `
         SELECT
-          task_id,
-          job_id,
-          worker_id,
-          task_type,
-          status,
-          payload,
-          result,
-          attempt,
-          max_attempts,
-          error_message,
-          created_at,
-          updated_at,
-          assigned_at,
-          started_at,
-          completed_at,
-          failed_at
-        FROM tasks
-        WHERE status = 'pending'
-        ORDER BY created_at ASC
+          t.task_id,
+          t.job_id,
+          t.worker_id,
+          t.task_type,
+          t.status,
+          t.payload,
+          t.result,
+          t.attempt,
+          t.max_attempts,
+          t.error_message,
+          t.created_at,
+          t.updated_at,
+          t.assigned_at,
+          t.started_at,
+          t.completed_at,
+          t.failed_at
+        FROM tasks t
+        WHERE
+          t.status = 'pending'
+
+          AND (
+            /*
+             * Non-training tasks use normal FIFO scheduling.
+             */
+            t.task_type <> 'training'
+
+            OR (
+
+              /*
+               * The requesting worker must not already have
+               * an active training task for this job.
+               */
+              NOT EXISTS (
+                SELECT 1
+                FROM tasks own_active
+                WHERE
+                  own_active.job_id = t.job_id
+                  AND own_active.task_type = 'training'
+                  AND own_active.worker_id = $1
+                  AND own_active.status IN (
+                    'assigned',
+                    'running'
+                  )
+              )
+
+              AND (
+
+                /*
+                 * Allow another training task while the number
+                 * of active training tasks is below the number
+                 * of online workers.
+                 */
+                (
+                  SELECT COUNT(*)
+                  FROM tasks active_training
+                  WHERE
+                    active_training.job_id = t.job_id
+                    AND active_training.task_type = 'training'
+                    AND active_training.status IN (
+                      'assigned',
+                      'running'
+                    )
+                )
+                <
+                (
+                  SELECT COUNT(*)
+                  FROM workers online_worker
+                  WHERE
+                    online_worker.status = 'online'
+                )
+
+                OR
+
+                /*
+                 * If there are no registered online workers,
+                 * allow the requesting worker to claim the task.
+                 *
+                 * This keeps repository-level task claiming
+                 * independent from worker registration.
+                 */
+                NOT EXISTS (
+                  SELECT 1
+                  FROM workers online_worker
+                  WHERE
+                    online_worker.status = 'online'
+                )
+
+              )
+            )
+          )
+
+        ORDER BY
+          t.created_at ASC
+
         FOR UPDATE SKIP LOCKED
+
         LIMIT 1
       `,
+      [workerId],
     );
 
     const row = result.rows[0];
@@ -266,7 +356,9 @@ export async function claimNextPendingTask(
           attempt = attempt + 1,
           assigned_at = NOW(),
           updated_at = NOW()
-        WHERE task_id = $2
+        WHERE
+          task_id = $2
+          AND status = 'pending'
         RETURNING
           task_id,
           job_id,
@@ -304,7 +396,6 @@ export async function claimNextPendingTask(
     client.release();
   }
 }
-
 export async function markTaskRunning(
   taskId: string,
   workerId: string,
@@ -350,13 +441,19 @@ export async function markTaskRunning(
  * Mark a running task as completed and persist its result.
  *
  * Only the worker that owns the running task can complete it.
+ *
+ * The optional PoolClient allows the caller to execute this
+ * operation inside an existing PostgreSQL transaction.
  */
 export async function markTaskCompleted(
   taskId: string,
   workerId: string,
   resultPayload: Record<string, unknown>,
+  client?: PoolClient,
 ): Promise<TaskRecord | null> {
-  const result = await db.query<TaskRow>(
+  const executor = client ?? db;
+
+  const result = await executor.query<TaskRow>(
     `
       UPDATE tasks
       SET
@@ -398,8 +495,11 @@ export async function markTaskFailed(
   taskId: string,
   workerId: string,
   errorMessage: string,
+  client?: PoolClient,
 ): Promise<TaskRecord | null> {
-  const result = await db.query<TaskRow>(
+  const executor = client ?? db;
+
+  const result = await executor.query<TaskRow>(
     `
       UPDATE tasks
       SET
@@ -439,11 +539,13 @@ export async function markTaskFailed(
 
   return row ? mapTaskRow(row) : null;
 }
-
 export async function requeueTask(
   taskId: string,
+  client?: PoolClient,
 ): Promise<TaskRecord | null> {
-  const result = await db.query<TaskRow>(
+  const executor = client ?? db;
+
+  const result = await executor.query<TaskRow>(
     `
       UPDATE tasks
       SET

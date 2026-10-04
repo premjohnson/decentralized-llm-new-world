@@ -1,7 +1,6 @@
+
 import assert from "node:assert/strict";
-
 import { after, before, describe, it } from "node:test";
-
 import { randomUUID } from "node:crypto";
 
 import { db } from "../src/db/pool.js";
@@ -374,8 +373,6 @@ describe("task HTTP API", () => {
     const createdTask = createResponse.json();
 
     /*
-     * IMPORTANT:
-     *
      * claimNextPendingTask() intentionally selects the
      * oldest pending task globally.
      *
@@ -423,26 +420,10 @@ describe("task HTTP API", () => {
 
     const task = response.json();
 
-    assert.equal(
-      task.taskId,
-      createdTask.taskId,
-    );
-
-    assert.equal(
-      task.workerId,
-      "worker-task-http",
-    );
-
-    assert.equal(
-      task.status,
-      "assigned",
-    );
-
-    assert.equal(
-      task.attempt,
-      1,
-    );
-
+    assert.equal(task.taskId, createdTask.taskId);
+    assert.equal(task.workerId, "worker-task-http");
+    assert.equal(task.status, "assigned");
+    assert.equal(task.attempt, 1);
     assert.equal(task.result, null);
   });
 
@@ -465,10 +446,7 @@ describe("task HTTP API", () => {
 
     const body = response.json();
 
-    assert.equal(
-      body.error,
-      "Invalid claim payload",
-    );
+    assert.equal(body.error, "Invalid claim payload");
   });
 
   /*
@@ -750,7 +728,7 @@ describe("task HTTP API", () => {
    * =========================================================
    */
 
-  it("moves a failed task to retrying", async () => {
+  it("moves a failed task to pending after automatic retry", async () => {
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/v1/tasks",
@@ -818,7 +796,8 @@ describe("task HTTP API", () => {
 
     const task = response.json();
 
-    assert.equal(task.status, "retrying");
+    assert.equal(task.status, "pending");
+    assert.equal(task.workerId, null);
 
     assert.equal(
       task.errorMessage,
@@ -861,7 +840,7 @@ describe("task HTTP API", () => {
    * =========================================================
    */
 
-  it("requeues a retrying task", async () => {
+  it("automatically requeues a retryable failed task", async () => {
     const createResponse = await app.inject({
       method: "POST",
       url: "/api/v1/tasks",
@@ -927,16 +906,17 @@ describe("task HTTP API", () => {
 
     assert.equal(failResponse.statusCode, 200);
 
-    const requeueResponse = await app.inject({
-      method: "POST",
-      url: `/api/v1/tasks/${createdTask.taskId}/requeue`,
+    const taskResponse = await app.inject({
+      method: "GET",
+      url: `/api/v1/tasks/${createdTask.taskId}`,
     });
 
-    assert.equal(requeueResponse.statusCode, 200);
+    assert.equal(taskResponse.statusCode, 200);
 
-    const task = requeueResponse.json();
+    const task = taskResponse.json();
 
     assert.equal(task.status, "pending");
     assert.equal(task.workerId, null);
+    assert.equal(task.errorMessage, "Temporary failure");
   });
 });
