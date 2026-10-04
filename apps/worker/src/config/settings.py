@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     context_size: int = 2048
     gpu_layers: int = -1
 
+    # Training artifacts
+    artifact_root: str = "artifacts"
+
     model_config = SettingsConfigDict(
         env_prefix="WORKER_",
         env_file=".env",
