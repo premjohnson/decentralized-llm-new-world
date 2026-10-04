@@ -98,6 +98,7 @@ class EvaluationService:
                 "storageUri": str(result_path.resolve()),
                 "sha256": sha256,
                 "sizeBytes": len(content),
+                "sampleCount": result.sample_count,
                 "modelName": model_name,
                 "format": "json",
             },
