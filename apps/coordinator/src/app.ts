@@ -29,7 +29,13 @@ import {
   startSchedulerWorker,
 } from "./modules/scheduler/scheduler.worker.js";
 
-import { artifactRoutes } from "./modules/artifacts/artifact.routes.js";
+import {
+  artifactRoutes,
+} from "./modules/artifacts/artifact.routes.js";
+
+import {
+  modelRoutes,
+} from "./modules/models/model.routes.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -73,6 +79,10 @@ export async function buildApp() {
   });
 
   await app.register(artifactRoutes);
+
+  await app.register(modelRoutes, {
+    prefix: "/api/v1",
+  });
 
   let healthMonitor:
     | NodeJS.Timeout

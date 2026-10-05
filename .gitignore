@@ -25,7 +25,6 @@ env/
 
 # Python tooling
 *.egg-info/
-.pytest_cache/
 
 # ML model files
 *.gguf
@@ -37,6 +36,10 @@ env/
 # Hugging Face / model caches
 .cache/
 models/.cache/
+
+# Generated ML training artifacts
+apps/worker/checkpoints/
+apps/worker/artifacts/
 
 # Logs
 *.log
