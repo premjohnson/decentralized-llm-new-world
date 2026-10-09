@@ -175,5 +175,22 @@ class CoordinatorClient:
 
         return response.json()
 
+    def report_telemetry(
+        self,
+        worker_id: str,
+        telemetry: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = self.client.post(
+            f"{self.base_url}/api/v1/workers/"
+            f"{worker_id}/telemetry",
+            json=telemetry,
+        )
+
+        response.raise_for_status()
+        return response.json()
+
+        response.raise_for_status()
+        return response.json()
+
     def close(self) -> None:
         self.client.close()

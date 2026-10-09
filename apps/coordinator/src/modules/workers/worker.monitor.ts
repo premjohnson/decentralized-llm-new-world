@@ -3,13 +3,36 @@ import type { FastifyBaseLogger } from "fastify";
 import { env } from "../../config/env.js";
 import { markStaleWorkersOffline } from "./worker.service.js";
 
+export interface WorkerHealthMonitor {
+  stop: () => Promise<void>;
+}
+
 export function startWorkerHealthMonitor(
   logger: FastifyBaseLogger,
-): NodeJS.Timeout {
+): WorkerHealthMonitor {
   const intervalMs =
     env.WORKER_HEALTH_CHECK_INTERVAL_SECONDS * 1000;
 
-  const timer = setInterval(async () => {
+  let timer: NodeJS.Timeout | undefined;
+  let stopped = false;
+  let runningCheck: Promise<void> | undefined;
+
+  const scheduleNextCheck = (): void => {
+    if (stopped) {
+      return;
+    }
+
+    timer = setTimeout(() => {
+      timer = undefined;
+
+      runningCheck = runCheck().finally(() => {
+        runningCheck = undefined;
+        scheduleNextCheck();
+      });
+    }, intervalMs);
+  };
+
+  const runCheck = async (): Promise<void> => {
     try {
       const staleWorkers = await markStaleWorkersOffline(
         env.WORKER_HEARTBEAT_TIMEOUT_SECONDS,
@@ -30,7 +53,20 @@ export function startWorkerHealthMonitor(
         "Failed to check for stale workers",
       );
     }
-  }, intervalMs);
+  };
 
-  return timer;
+  scheduleNextCheck();
+
+  return {
+    stop: async (): Promise<void> => {
+      stopped = true;
+
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+
+      await runningCheck;
+    },
+  };
 }

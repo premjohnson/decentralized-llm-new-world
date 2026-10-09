@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import platform
-import time
+import threading
+from typing import Any
 
 from config.settings import settings
 from coordinator.client import (
@@ -11,6 +12,7 @@ from coordinator.client import (
     WorkerNotRegisteredError,
 )
 from hardware.detector import detect_hardware
+from hardware.telemetry import collect_telemetry
 from tasks.executor import (
     TaskExecutor,
     UnsupportedTaskError,
@@ -29,7 +31,7 @@ def register_worker(
     client: CoordinatorClient,
     worker_id: str,
     hostname: str,
-    hardware,
+    hardware: Any,
 ) -> bool:
     try:
         registration = client.register_worker(
@@ -50,7 +52,6 @@ def register_worker(
             "Worker registration failed: %s",
             error,
         )
-
         return False
 
 
@@ -172,6 +173,97 @@ def process_one_task(
             )
 
 
+def heartbeat_loop(
+    client: CoordinatorClient,
+    worker_id: str,
+    hostname: str,
+    hardware: Any,
+    registered: threading.Event,
+    stop_event: threading.Event,
+) -> None:
+    """
+    Keep heartbeats independent from task execution.
+
+    Re-register when the Coordinator no longer recognizes this worker.
+    Telemetry failures must not interrupt heartbeat recovery.
+    """
+
+    interval = settings.heartbeat_interval_seconds
+
+    while not stop_event.is_set():
+        if not registered.is_set():
+            logger.info(
+                "Heartbeat loop attempting worker registration..."
+            )
+
+            success = register_worker(
+                client=client,
+                worker_id=worker_id,
+                hostname=hostname,
+                hardware=hardware,
+            )
+
+            if success:
+                registered.set()
+
+                logger.info(
+                    "Worker re-registered successfully."
+                )
+            else:
+                logger.warning(
+                    "Worker registration failed. "
+                    "Retrying in %s seconds.",
+                    interval,
+                )
+
+                stop_event.wait(interval)
+                continue
+
+        try:
+            heartbeat = client.heartbeat_worker(worker_id)
+
+            logger.info(
+                "Heartbeat sent | status=%s",
+                heartbeat["data"]["status"],
+            )
+
+            # Telemetry is independent of heartbeat recovery.
+            try:
+                telemetry = collect_telemetry()
+
+                client.report_telemetry(
+                    worker_id=worker_id,
+                    telemetry=telemetry,
+                )
+
+                logger.debug(
+                    "Worker telemetry reported successfully."
+                )
+
+            except Exception as telemetry_error:
+                logger.warning(
+                    "Telemetry reporting failed: %s",
+                    telemetry_error,
+                )
+
+        except WorkerNotRegisteredError:
+            logger.warning(
+                "Coordinator no longer knows worker '%s'. "
+                "Re-registration required.",
+                worker_id,
+            )
+
+            registered.clear()
+
+        except Exception as error:
+            logger.error(
+                "Heartbeat failed: %s",
+                error,
+            )
+
+        stop_event.wait(interval)
+
+
 def main() -> None:
     hardware = detect_hardware()
     hostname = platform.node()
@@ -205,7 +297,10 @@ def main() -> None:
         model_name=settings.model_name,
     )
 
-    registered = False
+    registered = threading.Event()
+    stop_event = threading.Event()
+
+    heartbeat_thread: threading.Thread | None = None
 
     try:
         logger.info(
@@ -223,114 +318,104 @@ def main() -> None:
             settings.heartbeat_interval_seconds,
         )
 
-        while True:
+        # Initial registration.
+        while not registered.is_set():
+            if stop_event.is_set():
+                return
 
-            # --------------------------------------------------
-            # Register if necessary
-            # --------------------------------------------------
+            logger.info(
+                "Registering worker '%s'...",
+                worker_id,
+            )
 
-            if not registered:
-                logger.info(
-                    "Registering worker '%s'...",
-                    worker_id,
+            if register_worker(
+                client=client,
+                worker_id=worker_id,
+                hostname=hostname,
+                hardware=hardware,
+            ):
+                registered.set()
+                break
+
+            logger.warning(
+                "Worker registration failed. "
+                "Retrying in %s seconds.",
+                settings.heartbeat_interval_seconds,
+            )
+
+            stop_event.wait(
+                settings.heartbeat_interval_seconds,
+            )
+
+        # Start the independent heartbeat and telemetry loop.
+        heartbeat_thread = threading.Thread(
+            target=heartbeat_loop,
+            args=(
+                client,
+                worker_id,
+                hostname,
+                hardware,
+                registered,
+                stop_event,
+            ),
+            name="worker-heartbeat",
+            daemon=True,
+        )
+
+        heartbeat_thread.start()
+
+        logger.info(
+            "Worker heartbeat thread started."
+        )
+
+        # Main task-processing loop.
+        while not stop_event.is_set():
+            if not registered.is_set():
+                stop_event.wait(
+                    settings.heartbeat_interval_seconds,
                 )
-
-                registered = register_worker(
-                    client=client,
-                    worker_id=worker_id,
-                    hostname=hostname,
-                    hardware=hardware,
-                )
-
-                if not registered:
-                    logger.warning(
-                        "Worker registration failed. "
-                        "Retrying in %s seconds.",
-                        settings.heartbeat_interval_seconds,
-                    )
-
-                    time.sleep(
-                        settings.heartbeat_interval_seconds,
-                    )
-
-                    continue
-
-            # --------------------------------------------------
-            # Heartbeat
-            # --------------------------------------------------
+                continue
 
             try:
-                heartbeat = client.heartbeat_worker(
-                    worker_id,
-                )
-
-                logger.info(
-                    "Heartbeat sent | status=%s",
-                    heartbeat["data"]["status"],
+                process_one_task(
+                    client=client,
+                    executor=executor,
+                    worker_id=worker_id,
                 )
 
             except WorkerNotRegisteredError:
                 logger.warning(
-                    "Coordinator no longer knows worker '%s'. "
-                    "Re-registration required.",
+                    "Worker '%s' is no longer registered.",
                     worker_id,
                 )
 
-                registered = False
-
-                continue
+                registered.clear()
 
             except Exception as error:
-                logger.error(
-                    "Heartbeat failed: %s",
+                logger.exception(
+                    "Unexpected task processing error: %s",
                     error,
                 )
 
-            # --------------------------------------------------
-            # Claim and execute work
-            # --------------------------------------------------
-
-            if registered:
-                try:
-                    process_one_task(
-                        client=client,
-                        executor=executor,
-                        worker_id=worker_id,
-                    )
-
-                except WorkerNotRegisteredError:
-                    logger.warning(
-                        "Worker '%s' is no longer registered.",
-                        worker_id,
-                    )
-
-                    registered = False
-
-                except Exception as error:
-                    logger.exception(
-                        "Unexpected task processing error: %s",
-                        error,
-                    )
-
-            # --------------------------------------------------
-            # Wait before next cycle
-            # --------------------------------------------------
-
-            time.sleep(
+            # Avoid busy-looping when there is no task.
+            stop_event.wait(
                 settings.heartbeat_interval_seconds,
             )
 
     except KeyboardInterrupt:
-        logger.info(
-            "Worker shutdown requested",
-        )
+        logger.info("Worker shutdown requested.")
 
     finally:
+        stop_event.set()
+
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(
+                timeout=settings.heartbeat_interval_seconds + 1,
+            )
+
         client.close()
 
-        logger.info(
-            "Worker stopped",
-        )
+        logger.info("Worker stopped.")
 
 
 if __name__ == "__main__":

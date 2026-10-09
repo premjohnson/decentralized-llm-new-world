@@ -59,6 +59,9 @@ const envSchema = z.object({
     .positive()
     .default(15),
 
+  /*
+   * PostgreSQL
+   */
   DATABASE_HOST: z
     .string()
     .default("localhost"),
@@ -90,6 +93,9 @@ const envSchema = z.object({
     .positive()
     .default(10),
 
+  /*
+   * Redis
+   */
   REDIS_HOST: z
     .string()
     .default("localhost"),
@@ -108,6 +114,27 @@ const envSchema = z.object({
     .int()
     .min(0)
     .default(0),
+
+  /*
+   * Solana / Blockchain
+   *
+   * RPC endpoint used by the coordinator to communicate
+   * with the Solana blockchain.
+   */
+  BLOCKCHAIN_RPC_URL: z
+    .string()
+    .url()
+    .default("https://api.devnet.solana.com"),
+
+  /*
+   * Filesystem path to the Solana authority wallet.
+   *
+   * The private key itself must never be stored in .env.
+   * Only the path to the keypair file is configured here.
+   */
+  BLOCKCHAIN_WALLET_PATH: z
+    .string()
+    .min(1),
 });
 
 export const env = envSchema.parse(

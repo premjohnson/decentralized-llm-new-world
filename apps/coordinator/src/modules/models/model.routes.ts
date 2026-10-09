@@ -39,6 +39,12 @@ export async function modelRoutes(
         model,
       });
     } catch (error) {
+      if (error instanceof Error) {
+        return reply.code(409).send({
+          error: error.message,
+        });
+      }
+
       request.log.error(
         { error },
         "Failed to register model",
@@ -144,20 +150,37 @@ export async function modelRoutes(
         });
       }
 
-      const model = await setModelStatus(
-        params.data.modelId,
-        body.data.status,
-      );
+      try {
+        const model = await setModelStatus(
+          params.data.modelId,
+          body.data.status,
+        );
 
-      if (!model) {
-        return reply.code(404).send({
-          error: "Model not found",
+        if (!model) {
+          return reply.code(404).send({
+            error: "Model not found",
+          });
+        }
+
+        return reply.send({
+          model,
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          return reply.code(409).send({
+            error: error.message,
+          });
+        }
+
+        request.log.error(
+          { error },
+          "Failed to update model status",
+        );
+
+        return reply.code(500).send({
+          error: "Failed to update model status",
         });
       }
-
-      return reply.send({
-        model,
-      });
     },
   );
 }

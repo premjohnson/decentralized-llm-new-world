@@ -1,0 +1,649 @@
+{
+  "address": "AqSVCKJqFTNmnRofWKPSvBxVMXtNohn9i1dXhHCCUskT",
+  "metadata": {
+    "name": "blockchain_training_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "record_training_round",
+      "discriminator": [
+        79,
+        115,
+        140,
+        38,
+        210,
+        106,
+        75,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "training_job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  105,
+                  110,
+                  105,
+                  110,
+                  103,
+                  95,
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "training_job.job_id_hash",
+                "account": "TrainingJob"
+              }
+            ]
+          }
+        },
+        {
+          "name": "training_round",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  105,
+                  110,
+                  105,
+                  110,
+                  103,
+                  95,
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "training_job"
+              },
+              {
+                "kind": "arg",
+                "path": "round_number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "round_number",
+          "type": "u64"
+        },
+        {
+          "name": "checkpoint_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "artifact_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "aggregation_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_training_job",
+      "discriminator": [
+        39,
+        74,
+        49,
+        73,
+        32,
+        216,
+        87,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "training_job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  105,
+                  110,
+                  105,
+                  110,
+                  103,
+                  95,
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "job_id_hash"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "job_id_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "model_name",
+          "type": "string"
+        },
+        {
+          "name": "model_version",
+          "type": "string"
+        },
+        {
+          "name": "worker_count",
+          "type": "u16"
+        },
+        {
+          "name": "dataset_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_training_status",
+      "discriminator": [
+        189,
+        70,
+        127,
+        19,
+        128,
+        134,
+        247,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "training_job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  97,
+                  105,
+                  110,
+                  105,
+                  110,
+                  103,
+                  95,
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "training_job.job_id_hash",
+                "account": "TrainingJob"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_status",
+          "type": {
+            "defined": {
+              "name": "TrainingStatus"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "TrainingJob",
+      "discriminator": [
+        54,
+        181,
+        214,
+        54,
+        172,
+        135,
+        114,
+        38
+      ]
+    },
+    {
+      "name": "TrainingRound",
+      "discriminator": [
+        30,
+        225,
+        4,
+        94,
+        12,
+        70,
+        27,
+        167
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "TrainingJobRegistered",
+      "discriminator": [
+        177,
+        54,
+        252,
+        2,
+        115,
+        89,
+        232,
+        85
+      ]
+    },
+    {
+      "name": "TrainingRoundRecorded",
+      "discriminator": [
+        208,
+        16,
+        34,
+        57,
+        49,
+        158,
+        78,
+        88
+      ]
+    },
+    {
+      "name": "TrainingStatusUpdated",
+      "discriminator": [
+        219,
+        229,
+        82,
+        240,
+        6,
+        66,
+        246,
+        110
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "EmptyModelName",
+      "msg": "Model name cannot be empty."
+    },
+    {
+      "code": 6001,
+      "name": "ModelNameTooLong",
+      "msg": "Model name exceeds the maximum allowed length."
+    },
+    {
+      "code": 6002,
+      "name": "EmptyModelVersion",
+      "msg": "Model version cannot be empty."
+    },
+    {
+      "code": 6003,
+      "name": "ModelVersionTooLong",
+      "msg": "Model version exceeds the maximum allowed length."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidWorkerCount",
+      "msg": "Worker count must be greater than zero."
+    },
+    {
+      "code": 6005,
+      "name": "Unauthorized",
+      "msg": "Caller is not authorized for this training job."
+    },
+    {
+      "code": 6006,
+      "name": "InvalidRoundNumber",
+      "msg": "Invalid training round number."
+    },
+    {
+      "code": 6007,
+      "name": "JobTerminal",
+      "msg": "Training job is already in a terminal state."
+    },
+    {
+      "code": 6008,
+      "name": "InvalidStatusTransition",
+      "msg": "Invalid training status transition."
+    },
+    {
+      "code": 6009,
+      "name": "CounterOverflow",
+      "msg": "Counter overflow."
+    }
+  ],
+  "types": [
+    {
+      "name": "TrainingJob",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "job_id_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "model_name",
+            "type": "string"
+          },
+          {
+            "name": "model_version",
+            "type": "string"
+          },
+          {
+            "name": "worker_count",
+            "type": "u16"
+          },
+          {
+            "name": "dataset_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "TrainingStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "round_count",
+            "type": "u32"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrainingJobRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "training_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "job_id_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "worker_count",
+            "type": "u16"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrainingRound",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "training_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "round_number",
+            "type": "u64"
+          },
+          {
+            "name": "checkpoint_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "artifact_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "aggregation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrainingRoundRecorded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "training_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "type": "u64"
+          },
+          {
+            "name": "checkpoint_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "artifact_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "aggregation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrainingStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Registered"
+          },
+          {
+            "name": "Running"
+          },
+          {
+            "name": "Completed"
+          },
+          {
+            "name": "Failed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TrainingStatusUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "training_job",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous_status",
+            "type": {
+              "defined": {
+                "name": "TrainingStatus"
+              }
+            }
+          },
+          {
+            "name": "new_status",
+            "type": {
+              "defined": {
+                "name": "TrainingStatus"
+              }
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

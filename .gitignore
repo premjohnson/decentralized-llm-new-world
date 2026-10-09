@@ -54,3 +54,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Solana / Anchor generated files
+blockchain-training-registry/target/
+blockchain-training-registry/.anchor/test-ledger/
+blockchain-training-registry/node_modules/
+
+# General generated Rust artifacts
+**/target/

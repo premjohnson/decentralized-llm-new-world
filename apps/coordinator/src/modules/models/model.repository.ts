@@ -93,6 +93,7 @@ export async function registerModel(
   return mapModel(row);
 }
 
+
 export async function findModelById(
   modelId: string,
 ): Promise<ModelRecord | null> {
@@ -111,6 +112,7 @@ export async function findModelById(
 
   return mapModel(result.rows[0]);
 }
+
 
 export async function findModelByNameAndVersion(
   modelName: string,
@@ -142,6 +144,26 @@ export async function findReadyModelByName(
       FROM model_registry
       WHERE model_name = $1
         AND status = 'ready'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [modelName],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return mapModel(result.rows[0]);
+}
+export async function findLatestModelByName(
+  modelName: string,
+): Promise<ModelRecord | null> {
+  const result = await db.query(
+    `
+      SELECT *
+      FROM model_registry
+      WHERE model_name = $1
       ORDER BY created_at DESC
       LIMIT 1
     `,

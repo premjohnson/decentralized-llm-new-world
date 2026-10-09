@@ -428,6 +428,284 @@ describe("Model Registry HTTP API", async () => {
     );
   });
 
+  /*
+   * ============================================================
+   * MODEL LIFECYCLE TESTS
+   * ============================================================
+   */
+
+  it("allows a registered model to transition to failed", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "registered-to-failed-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    assert.equal(created.model.status, "registered");
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "failed",
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+
+    const body = response.json();
+
+    assert.equal(body.model.status, "failed");
+  });
+
+  it("allows a ready model to transition to deprecated", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "ready-to-deprecated-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    const readyResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "ready",
+      },
+    });
+
+    assert.equal(readyResponse.statusCode, 200);
+
+    const deprecatedResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "deprecated",
+      },
+    });
+
+    assert.equal(deprecatedResponse.statusCode, 200);
+
+    const body = deprecatedResponse.json();
+
+    assert.equal(body.model.status, "deprecated");
+  });
+
+  it("allows a ready model to transition to failed", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "ready-to-failed-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    const readyResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "ready",
+      },
+    });
+
+    assert.equal(readyResponse.statusCode, 200);
+
+    const failedResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "failed",
+      },
+    });
+
+    assert.equal(failedResponse.statusCode, 200);
+
+    const body = failedResponse.json();
+
+    assert.equal(body.model.status, "failed");
+  });
+
+  it("rejects registered to deprecated transition", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "registered-to-deprecated-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "deprecated",
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+
+    const body = response.json();
+
+    assert.match(
+      body.error,
+      /Invalid model status transition/,
+    );
+  });
+
+  it("rejects deprecated to ready transition", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "deprecated-to-ready-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    const readyResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "ready",
+      },
+    });
+
+    assert.equal(readyResponse.statusCode, 200);
+
+    const deprecatedResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "deprecated",
+      },
+    });
+
+    assert.equal(deprecatedResponse.statusCode, 200);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "ready",
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+
+    const body = response.json();
+
+    assert.match(
+      body.error,
+      /Invalid model status transition/,
+    );
+  });
+
+  it("rejects failed to ready transition", async () => {
+    const artifactId = await createTestArtifact();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/models",
+      payload: {
+        modelName: "failed-to-ready-model",
+        version: "1.0.0",
+        artifactId,
+      },
+    });
+
+    assert.equal(createResponse.statusCode, 201);
+
+    const created = createResponse.json();
+
+    modelIds.push(created.model.modelId);
+
+    const failedResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "failed",
+      },
+    });
+
+    assert.equal(failedResponse.statusCode, 200);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/models/${created.model.modelId}/status`,
+      payload: {
+        status: "ready",
+      },
+    });
+
+    assert.equal(response.statusCode, 409);
+
+    const body = response.json();
+
+    assert.match(
+      body.error,
+      /Invalid model status transition/,
+    );
+  });
+
+  /*
+   * Existing validation test.
+   *
+   * This remains separate from lifecycle validation:
+   * schema validation = 400
+   * lifecycle violation = 409
+   */
   it("rejects an invalid model status", async () => {
     const modelId = randomUUID();
 

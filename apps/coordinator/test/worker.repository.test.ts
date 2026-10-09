@@ -95,4 +95,59 @@ describe("worker repository", () => {
     assert.ok(persisted);
     assert.equal(persisted.status, "offline");
   });
+
+  it("restores an offline worker to online after a heartbeat", async () => {
+    await db.query(
+      `
+        UPDATE workers
+        SET
+          status = 'offline',
+          last_heartbeat_at = NOW() - INTERVAL '120 seconds'
+        WHERE worker_id = $1
+      `,
+      [TEST_WORKER_ID],
+    );
+
+    const recovered = await updateWorkerHeartbeat(TEST_WORKER_ID);
+
+    assert.ok(recovered);
+    assert.equal(recovered.status, "online");
+
+    const persisted = await findWorkerById(TEST_WORKER_ID);
+
+    assert.ok(persisted);
+    assert.equal(persisted.status, "online");
+  });
+
+  it("updates an existing worker on re-registration without creating a duplicate", async () => {
+    const original = await findWorkerById(TEST_WORKER_ID);
+
+    assert.ok(original);
+
+    const updated = await upsertWorker({
+      workerId: TEST_WORKER_ID,
+      hostname: "re-registered-host",
+      cpuCores: 16,
+      memoryMb: 32768,
+      gpu: false,
+    });
+
+    assert.equal(updated.workerId, TEST_WORKER_ID);
+    assert.equal(updated.hostname, "re-registered-host");
+    assert.equal(updated.cpuCores, 16);
+    assert.equal(updated.memoryMb, 32768);
+    assert.equal(updated.gpu, false);
+    assert.equal(updated.status, "online");
+
+    const count = await db.query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM workers
+        WHERE worker_id = $1
+      `,
+      [TEST_WORKER_ID],
+    );
+
+    assert.equal(count.rows[0]?.count, "1");
+  });
 });

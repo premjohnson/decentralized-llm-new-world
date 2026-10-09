@@ -9,8 +9,23 @@ import {
   closeRedis,
   connectRedis,
 } from "./redis/client.js";
+import {
+  BlockchainOutboxProcessor,
+} from "./modules/blockchain/blockchain.outbox.processor.js";
+import {
+  BlockchainOutboxWorker,
+} from "./modules/blockchain/blockchain.outbox.worker.js";
+import {
+  BlockchainService,
+} from "./modules/blockchain/blockchain.service.js";
+import {
+  BlockchainClient,
+} from "./modules/blockchain/blockchain.client.js";
 
 async function start(): Promise<void> {
+  let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+  let blockchainOutboxWorker: BlockchainOutboxWorker | null = null;
+
   try {
     // --------------------------------------------------
     // PostgreSQL
@@ -33,7 +48,7 @@ async function start(): Promise<void> {
     // Fastify
     // --------------------------------------------------
 
-    const app = await buildApp();
+    app = await buildApp();
 
     await app.listen({
       host: env.HOST,
@@ -41,22 +56,69 @@ async function start(): Promise<void> {
     });
 
     // --------------------------------------------------
+    // Blockchain Outbox
+    // --------------------------------------------------
+
+const blockchainClient = new BlockchainClient(
+  env.BLOCKCHAIN_RPC_URL,
+  env.BLOCKCHAIN_WALLET_PATH,
+);
+    const blockchainService = new BlockchainService(
+      blockchainClient,
+    );
+
+    const blockchainOutboxProcessor =
+      new BlockchainOutboxProcessor(
+        blockchainService,
+      );
+
+    blockchainOutboxWorker =
+      new BlockchainOutboxWorker(
+        blockchainOutboxProcessor,
+      );
+
+    await blockchainOutboxWorker.start();
+
+    console.log(
+      "Blockchain outbox worker started",
+    );
+
+    // --------------------------------------------------
     // Graceful shutdown
     // --------------------------------------------------
 
     const shutdown = async (): Promise<void> => {
       try {
-        await app.close();
+        if (blockchainOutboxWorker) {
+          await blockchainOutboxWorker.stop();
+
+          console.log(
+            "Blockchain outbox worker stopped",
+          );
+        }
+
+        if (app) {
+          await app.close();
+        }
 
         await closeRedis();
         await closeDatabase();
 
-        console.log("Coordinator shutdown complete");
-      } catch (error) {
-        app.log.error(
-          error,
-          "Failed during shutdown",
+        console.log(
+          "Coordinator shutdown complete",
         );
+      } catch (error) {
+        if (app) {
+          app.log.error(
+            error,
+            "Failed during shutdown",
+          );
+        } else {
+          console.error(
+            "Failed during shutdown:",
+            error,
+          );
+        }
 
         process.exit(1);
       }
@@ -69,6 +131,22 @@ async function start(): Promise<void> {
       "Failed to start coordinator:",
       error,
     );
+
+    try {
+      if (blockchainOutboxWorker) {
+        await blockchainOutboxWorker.stop();
+      }
+    } catch {
+      // Worker may not have started.
+    }
+
+    try {
+      if (app) {
+        await app.close();
+      }
+    } catch {
+      // Fastify may not have started.
+    }
 
     try {
       await closeRedis();

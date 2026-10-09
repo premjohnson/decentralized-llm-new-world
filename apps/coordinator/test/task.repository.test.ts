@@ -15,9 +15,24 @@ import {
 } from "../src/modules/jobs/task.repository.js";
 
 const TEST_JOB_ID = randomUUID();
+const TEST_WORKER_ID = "worker-01";
 
 describe("task repository", () => {
   before(async () => {
+    await db.query(
+      `
+        INSERT INTO workers (
+          worker_id,
+          hostname,
+          cpu_cores,
+          memory_mb
+        )
+        VALUES ($1, 'task-repository-test-worker', 4, 4096)
+        ON CONFLICT (worker_id) DO NOTHING
+      `,
+      [TEST_WORKER_ID],
+    );
+
     await db.query(
       `
         INSERT INTO jobs (
@@ -133,11 +148,11 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
-    assert.equal(claimed.workerId, "worker-01");
+    assert.equal(claimed.workerId, TEST_WORKER_ID);
     assert.equal(claimed.status, "assigned");
     assert.equal(claimed.attempt, 1);
     assert.ok(claimed.assignedAt);
@@ -161,7 +176,7 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const firstClaim = await claimNextPendingTask("worker-01");
+    const firstClaim = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(firstClaim);
     assert.equal(firstClaim.taskId, taskId);
@@ -189,19 +204,19 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
 
     const running = await markTaskRunning(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
     );
 
     assert.ok(running);
     assert.equal(running.status, "running");
-    assert.equal(running.workerId, "worker-01");
+    assert.equal(running.workerId, TEST_WORKER_ID);
     assert.ok(running.startedAt);
   });
 
@@ -223,26 +238,32 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
 
     const running = await markTaskRunning(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
     );
 
     assert.ok(running);
 
     const completed = await markTaskCompleted(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
+      {
+        accuracy: 0.95,
+      },
     );
 
     assert.ok(completed);
     assert.equal(completed.status, "completed");
     assert.ok(completed.completedAt);
+    assert.deepEqual(completed.result, {
+      accuracy: 0.95,
+    });
   });
 
   it("moves a failed task to retrying when attempts remain", async () => {
@@ -264,21 +285,21 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
 
     const running = await markTaskRunning(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
     );
 
     assert.ok(running);
 
     const failed = await markTaskFailed(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
       "Worker crashed during training",
     );
 
@@ -310,21 +331,21 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
 
     const running = await markTaskRunning(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
     );
 
     assert.ok(running);
 
     const failed = await markTaskFailed(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
       "Temporary worker failure",
     );
 
@@ -357,21 +378,21 @@ describe("task repository", () => {
       [TEST_JOB_ID],
     );
 
-    const claimed = await claimNextPendingTask("worker-01");
+    const claimed = await claimNextPendingTask(TEST_WORKER_ID);
 
     assert.ok(claimed);
     assert.equal(claimed.taskId, taskId);
 
     const running = await markTaskRunning(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
     );
 
     assert.ok(running);
 
     const failed = await markTaskFailed(
       taskId,
-      "worker-01",
+      TEST_WORKER_ID,
       "Permanent failure",
     );
 
